@@ -70,6 +70,33 @@ async function connectToMongoDB() {
       }
     });
 
+    
+    // GET favorite recipes by user ID
+app.get('/users/:userId/favorites', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).send({
+        message: 'User ID is required'
+      });
+    }
+
+    const recipes = await recipeCollection
+      .find({ favoriteBy: userId })
+      .sort({ _id: -1 })
+      .toArray();
+
+    res.send(recipes);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      message: 'Failed to fetch favorite recipes'
+    });
+  }
+});
+
 
     // GET single recipe by ID
     app.get('/recipes/:id', async (req, res) => {
@@ -109,7 +136,8 @@ async function connectToMongoDB() {
         const recipe = {
           ...req.body,
           likesCount: 0,
-          likedBy: []
+          likedBy: [],
+          favoriteBy: []
         };
 
         const result = await recipeCollection.insertOne(recipe);
@@ -182,6 +210,66 @@ async function connectToMongoDB() {
         });
       }
     });
+    // FAVORITE / UNFAVORITE a recipe
+app.patch('/recipes/:id/favorite', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({
+        message: 'Invalid recipe ID'
+      });
+    }
+
+    if (!userId) {
+      return res.status(400).send({
+        message: 'User ID is required'
+      });
+    }
+
+    const recipeId = new ObjectId(id);
+
+    const recipe = await recipeCollection.findOne({
+      _id: recipeId
+    });
+
+    if (!recipe) {
+      return res.status(404).send({
+        message: 'Recipe not found'
+      });
+    }
+
+    const favoriteBy = recipe.favoriteBy || [];
+    const isFavorite = favoriteBy.includes(userId);
+
+    if (isFavorite) {
+      await recipeCollection.updateOne(
+        { _id: recipeId },
+        { $pull: { favoriteBy: userId } }
+      );
+    } else {
+      await recipeCollection.updateOne(
+        { _id: recipeId },
+        { $addToSet: { favoriteBy: userId } }
+      );
+    }
+
+    res.send({
+      success: true,
+      isFavorite: !isFavorite,
+      message: isFavorite
+        ? 'Recipe removed from favorites'
+        : 'Recipe added to favorites'
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      message: 'Failed to update favorite'
+    });
+  }
+});
 
 
     // DELETE a recipe
