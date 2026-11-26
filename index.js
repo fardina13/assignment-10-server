@@ -131,29 +131,32 @@ app.get('/users/:userId/favorites', async (req, res) => {
 
 
     // POST a recipe
-    app.post('/recipes', async (req, res) => {
-      try {
-        const recipe = {
-          ...req.body,
-          likesCount: 0,
-          likedBy: [],
-          favoriteBy: []
-        };
+    
+app.post('/recipes', async (req, res) => {
+  try {
+    const recipe = {
+      ...req.body,
+      price: 5,
+      likesCount: 0,
+      likedBy: [],
+      favoriteBy: []
+    };
 
-        const result = await recipeCollection.insertOne(recipe);
+    const result = await recipeCollection.insertOne(recipe);
 
-        res.send({
-          success: true,
-          insertedId: result.insertedId
-        });
-
-      } catch (error) {
-        console.error(error);
-        res.status(500).send({
-          message: 'Failed to add recipe'
-        });
-      }
+    res.send({
+      success: true,
+      insertedId: result.insertedId
     });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      message: 'Failed to add recipe'
+    });
+  }
+});
+
 
 
     // LIKE a recipe
@@ -271,6 +274,32 @@ app.patch('/recipes/:id/favorite', async (req, res) => {
   }
 });
 
+
+// GET recipes by author ID
+app.get('/users/:userId/recipes', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).send({
+        message: 'User ID is required'
+      });
+    }
+
+    const recipes = await recipeCollection
+      .find({ 'author.userId': userId })
+      .sort({ _id: -1 })
+      .toArray();
+
+    res.send(recipes);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      message: 'Failed to fetch user recipes'
+    });
+  }
+});
 
     // DELETE a recipe
     app.delete('/recipes/:id', async (req, res) => {
