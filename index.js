@@ -17,6 +17,7 @@ async function connectToMongoDB() {
 
     const database = client.db("assignment10_db");
     const recipeCollection = database.collection("recipes");
+    const purchaseCollection = database.collection("purchases");
 
     console.log('You successfully connected to MongoDB!');
 
@@ -300,6 +301,101 @@ app.get('/users/:userId/recipes', async (req, res) => {
     });
   }
 });
+
+
+// SAVE a purchase
+app.post('/purchases', async (req, res) => {
+  try {
+    const secretKey = req.headers['x-purchase-secret'];
+
+if (secretKey !== process.env.PURCHASE_SECRET_KEY) {
+  return res.status(401).send({
+    message: 'Unauthorized request'
+  });
+}
+    const {
+      userId,
+      recipeId,
+      sessionId,
+      amount
+    } = req.body;
+
+    if (!userId || !recipeId || !sessionId) {
+      return res.status(400).send({
+        message: 'Missing purchase information'
+      });
+    }
+
+    // Prevent duplicate purchases
+    const existingPurchase = await purchaseCollection.findOne({
+      sessionId
+    });
+
+    if (existingPurchase) {
+      return res.send({
+        success: true,
+        message: 'Purchase already saved'
+      });
+    }
+
+    const purchase = {
+      userId,
+      recipeId,
+      sessionId,
+      amount,
+      purchasedAt: new Date()
+    };
+
+    const result = await purchaseCollection.insertOne(purchase);
+
+    res.send({
+      success: true,
+      insertedId: result.insertedId
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      message: 'Failed to save purchase'
+    });
+  }
+});
+
+// GET purchased recipes by user ID
+app.get('/users/:userId/purchased', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).send({
+        message: 'User ID is required'
+      });
+    }
+
+    const purchases = await purchaseCollection
+      .find({ userId })
+      .sort({ purchasedAt: -1 })
+      .toArray();
+
+    const recipeIds = purchases
+      .map(purchase => purchase.recipeId)
+      .filter(id => ObjectId.isValid(id))
+      .map(id => new ObjectId(id));
+
+    const recipes = await recipeCollection
+      .find({ _id: { $in: recipeIds } })
+      .toArray();
+
+    res.send(recipes);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      message: 'Failed to fetch purchased recipes'
+    });
+  }
+});
+
 
     // DELETE a recipe
     app.delete('/recipes/:id', async (req, res) => {
